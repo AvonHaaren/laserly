@@ -1,4 +1,4 @@
-#import "@local/laserly:0.1.0": legend, assemble, element, arrow, splitter, mirror
+#import "@preview/laserly:0.1.0": legend, assemble, element, arrow, splitter, mirror
 
 #context {
   let objs = assemble(stroke:1pt+gradient.linear(..color.map.turbo), (
