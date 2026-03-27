@@ -29,7 +29,7 @@
   // "info",
 )
 
-#let rotate_around_point(img, rot, dx, dy) = {
+#let _rotate_around_point(img, rot, dx, dy) = {
   move(dx: dx, dy: dy, rotate(rot, move(dx: -dx, dy: -dy, img)))
 }
 
@@ -114,7 +114,7 @@
       let ndy = dy + o.dist * calc.sin(light_angle)
 
       let p = (o.pivot)(o.obj)
-      let rotated_object = rotate_around_point(o.obj, light_angle +o.rot, p.x, p.y)
+      let rotated_object = _rotate_around_point(o.obj, light_angle +o.rot, p.x, p.y)
       drawings_list.push(place(rotated_object, dx: ndx -om.width/2, dy: ndy -om.height/2))
 
       if i >= 0 {
@@ -260,7 +260,7 @@
         let img = _load_svg("assets/" + type + "/" + str(variant) + ".svg", size: size)
 
         let p = pivot(img)
-        move(rotate_around_point(img, -90deg, -measure(img).width/2, 0pt), dx: measure(img).width/2)
+        move(_rotate_around_point(img, -90deg, -measure(img).width/2, 0pt), dx: measure(img).width/2)
       }
     }
     return (obj: r, type: type, variant: variant, info_pos: info_pos, info_num: info_num, dist: dist, rot: rot, reflect: 100%, pivot: pivot)

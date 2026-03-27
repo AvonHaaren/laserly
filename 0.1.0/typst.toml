@@ -1,5 +1,5 @@
 [package]
-name = "laser-optics"
+name = "laserly"
 version = "0.1.0"
 entrypoint = "src/lib.typ"
 authors = ["Robin Eberhard"]
