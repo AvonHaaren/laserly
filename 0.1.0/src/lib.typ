@@ -297,7 +297,23 @@
       path3_ = (path3,)
     }
 
-    let r = _load_svg("assets/" + type + "/" + str(variant) + ".svg", size: size)
+    let r
+    if type == "dichroic" {
+      r = {
+        context {
+          let img = _load_svg("assets/" + type + "/" + str(variant) + ".svg", size: size)
+
+          let p = pivot(img)
+          move(
+            _rotate_around_point(img, -45deg, -measure(img).width / 2, 0pt),
+            dx: measure(img).width * (0.5 + 0.3 * calc.cos(rot * 2)),
+            dy: measure(img).width * 0.3 * calc.cos(rot * 2),
+          )
+        }
+      }
+    } else {
+      r = _load_svg("assets/" + type + "/" + str(variant) + ".svg", size: size)
+    }
 
     return (obj: r, type: type, variant: variant, info_pos: info_pos, info_num: info_num, dist: dist, rot: rot, reflect: 0%, pivot: pivot, subcomponents: (path1_, path2_, path3_))
   }
