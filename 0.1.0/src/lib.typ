@@ -13,6 +13,7 @@
   "mirror",
   "flip_mirror",
   "periscope",
+  "prism_pair",
   "grating",
   "aom",
   "eom",
