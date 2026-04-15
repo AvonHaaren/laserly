@@ -247,7 +247,12 @@
   let f(stroke: none) = {
     let pivot(img) = { (x: 0pt, y: 0pt) }
 
-    let r = _load_svg("assets/" + type + "/" + str(variant) + ".svg", size: size)
+    let r
+    if type == "empty" {
+      r = none
+    } else {
+      r = _load_svg("assets/" + type + "/" + str(variant) + ".svg", size: size)
+    }
 
     return (obj: r, type: type, variant: variant, info_pos: info_pos, info_num: info_num, dist: dist, rot: rot, reflect: 0%, pivot: pivot)
   }
