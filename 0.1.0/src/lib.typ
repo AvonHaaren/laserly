@@ -103,6 +103,10 @@
 
     let i = 0
     for o_fct in objs {
+      if type(o_fct) == type(stroke) {
+        stroke = o_fct
+        continue
+      }
       let o = o_fct(stroke: stroke)
 
       elements = _add_element(elements, o)
