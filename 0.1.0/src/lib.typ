@@ -24,14 +24,13 @@
   "objective",
   "cavity",
   "laser",
-
   // "fiber",
   // "laser_beam",
   // "info",
 )
 
-#let _rotate_around_point(img, rot, dx, dy) = {
-  move(dx: dx, dy: dy, rotate(rot, move(dx: -dx, dy: -dy, img)))
+#let _rotate_around_point(img, rot, dx, dy, reflow: false) = {
+  move(dx: dx, dy: dy, rotate(rot, move(dx: -dx, dy: -dy, img), reflow: reflow))
 }
 
 #let _load_svg(filename, size: 1.0) = {
@@ -47,10 +46,10 @@
     data = data.replace(width_str, "width=\"" + str(width * size) + "mm")
     data = data.replace(height_str, "height=\"" + str(height * size) + "mm")
 
-    for m in data.matches(regex("stroke-width:[0-9]+\.?[0-9]*")).rev() {
-      let stroke_width = float(data.slice(m.start+13, m.end))
-      data = data.slice(0, m.start+13) + str(stroke_width / size) + data.slice(m.end)
-    }
+    // for m in data.matches(regex("stroke-width:[0-9]+\.?[0-9]*")).rev() {
+    //   let stroke_width = float(data.slice(m.start + 13, m.end))
+    //   data = data.slice(0, m.start + 13) + str(stroke_width / size) + data.slice(m.end)
+    // }
   }
   image(bytes(data))
 }
@@ -64,8 +63,7 @@
         arr.at(o.type).push(o.variant)
       }
     }
-  }
-  else {
+  } else {
     if o.at(0) not in arr {
       arr.insert(o.at(0), o.at(1))
     } else {
@@ -78,7 +76,7 @@
   }
   return arr
 }
-#let assemble(rot: 0deg, _is_sub: false, stroke: 1pt+black, objs) = {
+#let assemble(rot: 0deg, _is_sub: false, stroke: 1pt + black, objs) = {
   if type(objs) != array {
     objs = (objs,)
   }
@@ -119,11 +117,30 @@
       let ndy = dy + o.dist * calc.sin(light_angle)
 
       let p = (o.pivot)(o.obj)
-      let rotated_object = _rotate_around_point(o.obj, light_angle +o.rot, p.x, p.y)
-      drawings_list.push(place(rotated_object, dx: ndx -om.width/2, dy: ndy -om.height/2))
+      let rotated_object = _rotate_around_point(o.obj, light_angle + o.rot, p.x, p.y)
+      if not o.virtual {
+        drawings_list.push(place(rotated_object, dx: ndx - om.width / 2, dy: ndy - om.height / 2))
+      }
 
       if i >= 0 {
-        laser_lines_list.push(place(line(start: (dx, dy), end: (ndx, ndy), stroke: stroke)))
+        if type(stroke.paint) == gradient {
+          // unsuccessful attempt at making gradients angled consistently across the beam path
+
+          // laser_lines_list.push(place(
+          //   rotate(
+          //     light_angle,
+          //     rect(width: o.dist + stroke.thickness, height: stroke.thickness, stroke: none, fill: stroke.paint),
+          //     reflow: true,
+          //   ),
+          //   // dx: dx - stroke.thickness / 2,
+          //   dx: ndx - stroke.thickness / 2,
+          //   // dy: ndy - stroke.thickness / 2,
+          //   dy: - stroke.thickness / 2,
+          // ))
+          laser_lines_list.push(place(line(start: (dx, dy), end: (ndx, ndy), stroke: stroke)))
+        } else {
+          laser_lines_list.push(place(line(start: (dx, dy), end: (ndx, ndy), stroke: stroke)))
+        }
       }
 
       dx = ndx
@@ -131,8 +148,11 @@
 
       // Somehow we can't just measure(rotated_object), so we have to do it manually
       let em = measure(o.obj)
-      let em_w = calc.abs(em.width * calc.cos(light_angle +o.rot) + em.height * calc.sin(light_angle +o.rot))
-      let em_h = calc.abs(em.width * calc.sin(light_angle +o.rot) + em.height * calc.cos(light_angle +o.rot))
+      let em_w = calc.abs(em.width * calc.cos(light_angle + o.rot) + em.height * calc.sin(light_angle + o.rot))
+      let em_h = calc.abs(em.width * calc.sin(light_angle + o.rot) + em.height * calc.cos(light_angle + o.rot))
+      let em = measure(_rotate_around_point(o.obj, light_angle + o.rot, p.x, p.y, reflow: true))
+      let em_w = em.width
+      let em_h = em.height
 
       min_dx = calc.min(min_dx, ndx - em_w / 2)
       max_dx = calc.max(max_dx, ndx + em_w / 2)
@@ -148,31 +168,43 @@
 
         let idx = 0
         let idy = 0
-        if o.info_pos == left { idx = -1 }
-        else if o.info_pos == right { idx = 1 }
-        else if o.info_pos == top { idy = -1 }
-        else if o.info_pos == bottom { idy = 1 }
-        else { assert(false, "o.info needs to be one of [top, right, bottom, left]") }
+        if o.info_pos == left { idx = -1 } else if o.info_pos == right { idx = 1 } else if o.info_pos == top {
+          idy = -1
+        } else if o.info_pos == bottom { idy = 1 } else {
+          assert(false, "o.info needs to be one of [top, right, bottom, left]")
+        }
 
-        let info_img_data = read("assets/info/1.svg")
+        // let info_img_data = read("assets/info/1.svg")
 
-        info_img_data = info_img_data.replace(">1<", ">" + str(o.info_num) + "<")
+        // info_img_data = info_img_data.replace(">1<", ">" + str(o.info_num) + "<").replace("Linux Biolinum", "Lato")
 
-        let info_img = image(bytes(info_img_data))
+        // let info_img = image(bytes(info_img_data))
+        let info_color = rgb(100, 20, 20)
+        let info_img = circle(
+          [
+            #set align(center + horizon)
+            #set text(fill: info_color)
+            #str(o.info_num)
+          ],
+          radius: 7.5pt,
+          stroke: 1.1pt + info_color,
+        )
         let im = measure(info_img)
-        place(info_img,
-          dx: dx -im.width/2 +idx*(em_w/2 + im.width/2 + margin),
-          dy: dy -im.height/2 +idy*(em_h/2 + im.height/2 + margin))
+        place(
+          info_img,
+          dx: dx - im.width / 2 + idx * (em_w / 2 + im.width / 2 + margin),
+          dy: dy - im.height / 2 + idy * (em_h / 2 + im.height / 2 + margin),
+        )
 
-        min_dx = calc.min(min_dx, min_dx + idx*(im.width + margin))
-        max_dx = calc.max(max_dx, max_dx + idx*(im.width + margin))
+        min_dx = calc.min(min_dx, min_dx + idx * (im.width + margin))
+        max_dx = calc.max(max_dx, max_dx + idx * (im.width + margin))
 
-        min_dy = calc.min(min_dy, min_dy + idy*(im.height + margin))
-        max_dy = calc.max(max_dy, max_dy + idy*(im.height + margin))
+        min_dy = calc.min(min_dy, min_dy + idy * (im.height + margin))
+        max_dy = calc.max(max_dy, max_dy + idy * (im.height + margin))
       }
 
       if o.reflect > 0% {
-        light_angle += 2*o.rot
+        light_angle += 2 * o.rot
       }
 
       // The following is an attempt to make a deflected order of an aom that I didn't fully finish
@@ -190,8 +222,11 @@
       // }
 
       if "subcomponents" in o {
+        if o.type == "aom" {
+          o.rot -= 45deg
+        }
         let sub1 = assemble(o.subcomponents.at(0), rot: light_angle, stroke: stroke)
-        drawings_list.push(place(sub1.content, dx: ndx +sub1.dims.min_dx, dy: ndy +sub1.dims.min_dy))
+        drawings_list.push(place(sub1.content, dx: ndx + sub1.dims.min_dx, dy: ndy + sub1.dims.min_dy))
         for s in sub1.elements.pairs() { elements = _add_element(elements, s) }
 
         min_dx = calc.min(min_dx, sub1.dims.min_dx + ndx)
@@ -199,8 +234,8 @@
         min_dy = calc.min(min_dy, sub1.dims.min_dy + ndy)
         max_dy = calc.max(max_dy, sub1.dims.max_dy + ndy)
 
-        let sub2 = assemble(o.subcomponents.at(1), rot: light_angle +90deg +2*o.rot, stroke: stroke)
-        drawings_list.push(place(sub2.content, dx: dx +sub2.dims.min_dx, dy: dy +sub2.dims.min_dy))
+        let sub2 = assemble(o.subcomponents.at(1), rot: light_angle + 90deg + 2 * o.rot, stroke: stroke)
+        drawings_list.push(place(sub2.content, dx: dx + sub2.dims.min_dx, dy: dy + sub2.dims.min_dy))
         for s in sub2.elements.pairs() { elements = _add_element(elements, s) }
 
         min_dx = calc.min(min_dx, sub2.dims.min_dx + ndx)
@@ -210,8 +245,8 @@
 
         let sub3 = (content: [], dims: (min_dx: 0pt, max_dx: 0pt, min_dy: 0pt, max_dy: 0pt))
         if o.subcomponents.at(2) != none {
-          sub3 = assemble(o.subcomponents.at(2), rot: light_angle -90deg +2*o.rot, stroke: stroke)
-          drawings_list.push(place(sub3.content, dx: dx +sub3.dims.min_dx, dy: dy +sub3.dims.min_dy))
+          sub3 = assemble(o.subcomponents.at(2), rot: light_angle - 90deg + 2 * o.rot, stroke: stroke)
+          drawings_list.push(place(sub3.content, dx: dx + sub3.dims.min_dx, dy: dy + sub3.dims.min_dy))
           for s in sub3.elements.pairs() { elements = _add_element(elements, s) }
 
           min_dx = calc.min(min_dx, sub3.dims.min_dx + ndx)
@@ -238,13 +273,17 @@
   }
 
   contents = move(contents, dx: -min_dx, dy: -min_dy)
-  contents += h(max_dx -min_dx)
-  contents += v(max_dy -min_dy -19.8pt) //there is a default offset of 19.8pt for some reason
+  contents += h(max_dx - min_dx)
+  contents += v(max_dy - min_dy - 1.2em) //there is a default offset of 19.8pt for some reason
 
-  return (content: contents, elements: elements, dims: (min_dx: min_dx, max_dx: max_dx, min_dy: min_dy, max_dy: max_dy))
+  return (
+    content: box(align(left, contents)),
+    elements: elements,
+    dims: (min_dx: min_dx, max_dx: max_dx, min_dy: min_dy, max_dy: max_dy),
+  )
 }
 
-#let element(type, variant: 1, dist: 30pt, rot: 0deg, size: 1.0, info_pos: none, info_num: -1) = {
+#let element(type, variant: 1, dist: 30pt, rot: 0deg, size: 1.0, info_pos: none, info_num: -1, virtual: false) = {
   let f(stroke: none) = {
     let pivot(img) = { (x: 0pt, y: 0pt) }
 
@@ -255,11 +294,31 @@
       r = _load_svg("assets/" + type + "/" + str(variant) + ".svg", size: size)
     }
 
-    return (obj: r, type: type, variant: variant, info_pos: info_pos, info_num: info_num, dist: dist, rot: rot, reflect: 0%, pivot: pivot)
+    return (
+      obj: r,
+      type: type,
+      variant: variant,
+      info_pos: info_pos,
+      info_num: info_num,
+      dist: dist,
+      rot: rot,
+      reflect: 0%,
+      pivot: pivot,
+      virtual: virtual,
+    )
   }
   return f
 }
-#let mirror(type: "mirror", variant: 1, dist: 30pt, rot: 0deg, size: 1.0, info_pos: none, info_num: -1) = {
+#let mirror(
+  type: "mirror",
+  variant: 1,
+  dist: 30pt,
+  rot: 0deg,
+  size: 1.0,
+  info_pos: none,
+  info_num: -1,
+  virtual: false,
+) = {
   let f(stroke: none) = {
     let pivot(img) = {
       return (x: 0pt, y: 0pt)
@@ -270,17 +329,40 @@
         let img = _load_svg("assets/" + type + "/" + str(variant) + ".svg", size: size)
 
         let p = pivot(img)
-        move(_rotate_around_point(img, -90deg, -measure(img).width/2, 0pt), dx: measure(img).width/2)
+        move(_rotate_around_point(img, -90deg, -measure(img).width / 2, 0pt, reflow: true), dx: measure(img).width / 2)
       }
     }
-    return (obj: r, type: type, variant: variant, info_pos: info_pos, info_num: info_num, dist: dist, rot: rot, reflect: 100%, pivot: pivot)
+    return (
+      obj: r,
+      type: type,
+      variant: variant,
+      info_pos: info_pos,
+      info_num: info_num,
+      dist: dist,
+      rot: rot,
+      reflect: 100%,
+      pivot: pivot,
+      virtual: virtual,
+    )
   }
 
   return f
 }
 
 #let type_fct = type
-#let splitter(path1, path2, path3: none, type: "beam_splitter_cube", variant: 1, dist: 30pt, rot: 0deg, size: 1, info_pos: none, info_num: -1) = {
+#let splitter(
+  path1,
+  path2,
+  path3: none,
+  type: "beam_splitter_cube",
+  variant: 1,
+  dist: 30pt,
+  rot: 0deg,
+  size: 1,
+  info_pos: none,
+  info_num: -1,
+  virtual: false,
+) = {
   let f(stroke: none) = {
     let pivot(img) = { (x: 0pt, y: 0pt) }
 
@@ -302,34 +384,15 @@
     let r
     if type == "dichroic" {
       r = {
-        context {
-          let p = pivot(img)
-
-          move(
-            _rotate_around_point(img, -45deg, -measure(img).width / 2, 0pt),
-            dx: measure(img).width * (0.5 + 0.3 * calc.cos(rot * 2)),
-            dy: measure(img).width * 0.3 * calc.cos(rot * 2),
-          )
-        }
-      }
-    } else if type == "aom" {
-      r = {
-        context {
-          let p = pivot(img)
-
-          move(
-            _rotate_around_point(img, 45deg, 0pt, 0pt),
-            dx: measure(img).width * 0,
-            dy: measure(img).width * 0,
-          )
-        }
+        move(
+          _rotate_around_point(img, -45deg, -measure(img).width / 2, 0pt, reflow: true),
+          dx: measure(img).width * (0.5 + 0.3 * calc.cos(rot * 2)),
+          dy: measure(img).width * 0.3 * calc.cos(rot * 2),
+        )
       }
     } else {
       r = img
     }
-
-    // in order for the rotation parameter to make sense for an AOM, we have to change it
-    let new_rot = if type != "aom" { rot } else { rot - 45deg }
 
     return (
       obj: r,
@@ -338,10 +401,11 @@
       info_pos: info_pos,
       info_num: info_num,
       dist: dist,
-      rot: new_rot,
+      rot: rot,
       reflect: 0%,
       pivot: pivot,
       subcomponents: (path1_, path2_, path3_),
+      virtual: virtual,
     )
   }
   return f
@@ -357,11 +421,22 @@
     }
 
     let r = {
-      place(line(start: (0pt, 0pt), end: (-dir*size_, -size_), stroke: stroke))
-      place(line(start: (0pt, 0pt), end: (-dir*size_, size_), stroke: stroke))
+      place(line(start: (0pt, 0pt), end: (-dir * size_, -size_), stroke: stroke))
+      place(line(start: (0pt, 0pt), end: (-dir * size_, size_), stroke: stroke))
     }
 
-    return (obj: r, type: "arrow", variant: 1, info_pos: info_pos, info_num: info_num, dist: dist, rot: 0deg, reflect: 0%, pivot: pivot)
+    return (
+      obj: r,
+      type: "arrow",
+      variant: 1,
+      info_pos: info_pos,
+      info_num: info_num,
+      dist: dist,
+      rot: 0deg,
+      reflect: 0%,
+      pivot: pivot,
+      virtual: false,
+    )
   }
 
   return f
@@ -389,8 +464,8 @@
 
       min_dx = calc.min(min_dx, dx)
       min_dy = calc.min(min_dy, dy)
-      max_dx = calc.max(max_dx, dx+m.width)
-      max_dy = calc.max(max_dy, dy+m.height)
+      max_dx = calc.max(max_dx, dx + m.width)
+      max_dy = calc.max(max_dy, dy + m.height)
 
       move(objs.assembly.content, dx: dx, dy: dy)
       // linebreak()
@@ -402,33 +477,36 @@
   }
 
   cx = move(cx, dx: -min_dx, dy: -min_dy)
-  cx += h(max_dx -min_dx)
-  cx += v(max_dy -min_dy ) //there is a default offset of 19.8pt for some reason
+  cx += h(max_dx - min_dx)
+  cx += v(max_dy - min_dy) //there is a default offset of 19.8pt for some reason
 
   return (content: cx, elements: elements)
 }
 
-#let legend(components,
-        labels: (),
-        alt-text: (),
-        pic_scale: 0.7,
-        pic_text_size: 10pt,
-        info_text_size: 11pt,
-        pic_padding: 0.5em,
-        info_padding: 0.7em) = {
+#let legend(
+  components,
+  labels: (),
+  alt-text: (),
+  pic_scale: 0.7,
+  pic_text_size: 10pt,
+  info_text_size: 11pt,
+  pic_padding: 0.5em,
+  info_padding: 0.7em,
+) = {
   let str-fmt(s, alt-text) = {
-    let c = s.at(0).to-unicode()
-    if c >= 97 and c <= 122 {
-      c -= 32
-    }
+    // upper case first
+    // let c = s.at(0).to-unicode()
+    // if c >= 97 and c <= 122 {
+    //   c -= 32
+    // }
 
-    s = str.from-unicode(c) + s.slice(1)
+    // s = str.from-unicode(c) + s.slice(1)
 
-    s = s.replace("lambda", "λ")
-    s = s.replace("Lambda", "λ")
-
+    s = s.replace("lambda-DIV-2", "HWP")
+    s = s.replace("lambda-DIV-4", "QWP")
+    s = s.replace("aom", "AOM")
+    s = s.replace("eom", "EOM")
     s = s.replace("-DIV-", "/")
-
     s = s.replace("_", " ")
 
     for r in alt-text {
@@ -438,6 +516,31 @@
     return s
   }
 
+  let split-rows(items, max-width) = {
+    let rows = ()
+    let current = ()
+    let current-width = 0
+
+    for item in items {
+      let w = measure(item).width / max-width
+
+      if current-width + w > 1 {
+        rows.push(current)
+        current = (item,)
+        current-width = w
+      } else {
+        current.push(item)
+        current-width += w
+      }
+    }
+
+    if current.len() > 0 {
+      rows.push(current)
+    }
+
+    rows
+  }
+
   context {
     set align(center)
 
@@ -445,6 +548,7 @@
       set par(leading: 0.2em)
 
       let pic_text_margin = 5pt
+      let legend_elements = ()
       for k in _element_order {
         if components.at(k, default: none) != none {
           let v = components.at(k)
@@ -454,35 +558,66 @@
               img + h(pic_text_margin)
             }
           }
-          let t = box(text(str-fmt(k, alt-text), font: "Linux Biolinum", size: pic_text_size))
-          box(box(img_content) + box(t, inset: (y: measure(img_content).height/2 - measure(t).height/2)))
-          h(10pt)
+          let t = box(text(str-fmt(k, alt-text)))
+
+          legend_elements.push(
+            box(
+              // align(horizon, img_content + t),
+              box(
+                img_content,
+                inset: (y: -measure(img_content).height / 2 + measure(t).height / 2),
+              )
+                + box(
+                  t,
+                ),
+              inset: (y: measure(img_content).height / 2),
+            ),
+          )
         }
       }
+
+      layout(size => {
+        let full = 80% * size.width
+        let legend-rows = split-rows(legend_elements, full)
+        for row in legend-rows {
+          grid(columns: row.len(), align: horizon, column-gutter: 1em, row-gutter: 0em, ..row)
+          v(-1.5em)
+        }
+        v(1.5em)
+      })
     }
 
     let info_content = {
       let i = 1
       for info_text in labels {
-        box(str(i) + ": " + text(info_text, size: info_text_size) + h(10pt))
+        box(str(i) + ": " + text(info_text) + h(10pt))
         i += 1
       }
     }
 
-    let c = rect(
-      rect(content + v(pic_padding),
-        stroke: (bottom: 0.0pt),
-        inset: (x: pic_padding, y: pic_padding -7pt)
+    let c = if labels != () {
+      rect(
+        rect(content + v(pic_padding), stroke: (bottom: 0.0pt), inset: (x: pic_padding, y: pic_padding - 7pt))
+          + v(-1.5em)
+          + rect(line(length: 95%), width: 100%, stroke: 0pt)
+          + v(-1.5em)
+          + rect(info_content, inset: (x: info_padding, y: info_padding), stroke: 0.0pt)
+          + v(-0.5em),
+        inset: (x: 0pt, y: 0.5em),
+        stroke: 0.8pt,
       )
-      + v(-1.5em)
-      + rect(line(length: 95%), width: 100%, stroke: 0pt)
-      + v(-1.5em)
-      + rect(info_content,
-          inset: (x: info_padding, y: info_padding),
-          stroke: 0.0pt)
-      + v(-0.5em),
-      inset: (x: 0pt, y: 0.5em),
-      stroke: 0.8pt)
+    } else {
+      rect(
+        rect(
+          content + v(pic_padding),
+          stroke: (bottom: 0.0pt),
+          inset: (x: pic_padding, y: pic_padding - 7pt),
+          width: 80%,
+        ),
+        inset: (x: 0pt, y: 0.5em),
+        stroke: 0.8pt,
+      )
+    }
 
     box(c)
   }
